@@ -40,7 +40,7 @@ func (s *SpiderStatus) AddItem() {
 }
 
 func (s *SpiderStatus) FinishTask() {
-	atomic.AddInt64(&s.TotalTask, 1)
+	atomic.AddInt64(&s.FinishedTask, 1)
 }
 
 func (s *SpiderStatus) PrintSignalLine(name string) {

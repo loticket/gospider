@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhshch2002/goreq"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -22,7 +24,7 @@ func TestNewSpider(t *testing.T) {
 		fmt.Println("OnResp")
 		a += 1
 	})
-	s.OnItem(func(i interface{}) interface{} {
+	s.OnItem(func(ctx *Context, i interface{}) interface{} {
 		fmt.Println("OnItem", i)
 		a += 1
 		return i
@@ -74,4 +76,25 @@ func TestContext_Abort(t *testing.T) {
 	)
 	_ = <-c
 	s.Wait()
+}
+
+func TestSpiderManyTask(t *testing.T) {
+	s := NewSpider()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, "Hello")
+	}))
+	defer ts.Close()
+	i := 0
+	a := 30
+	for a > 0 {
+		s.SeedTask(
+			goreq.Get(ts.URL),
+			func(ctx *Context) {
+				i += 1
+			},
+		)
+		a -= 1
+	}
+	s.Wait()
+	assert.Equal(t, 30, i)
 }

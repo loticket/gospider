@@ -1,13 +1,19 @@
 package gospider
 
 import (
+	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/panjf2000/ants/v2"
 	"github.com/tidwall/gjson"
 	"github.com/zhshch2002/goreq"
 	"log"
+	"runtime"
 	"time"
+)
+
+var (
+	UnknownExt = errors.New("unknown ext")
 )
 
 type Handler func(ctx *Context)
@@ -37,10 +43,11 @@ type Spider struct {
 	Name   string
 	Output bool
 
-	Client   *goreq.Client
-	status   *SpiderStatus
-	taskPool *ants.Pool
-	itemPool *ants.Pool
+	Client    *goreq.Client
+	Status    *SpiderStatus
+	Scheduler Scheduler
+	taskPool  *ants.Pool
+	itemPool  *ants.Pool
 
 	onTaskHandlers      []func(ctx *Context, t *Task) *Task
 	onRespHandlers      []Handler
@@ -50,7 +57,7 @@ type Spider struct {
 	onRespErrorHandlers []func(ctx *Context, err error)
 }
 
-func NewSpider(e ...Extension) *Spider {
+func NewSpider(e ...interface{}) *Spider {
 	pt, err := ants.NewPool(10)
 	if err != nil {
 		panic(err)
@@ -60,17 +67,32 @@ func NewSpider(e ...Extension) *Spider {
 		panic(err)
 	}
 	s := &Spider{
-		Name:     "gospider",
-		Output:   true,
-		Client:   goreq.NewClient(),
-		status:   NewSpiderStatus(),
-		taskPool: pt,
-		itemPool: pi,
+		Name:      "gospider",
+		Output:    true,
+		Client:    goreq.NewClient(),
+		Scheduler: NewBaseScheduler(false),
+		Status:    NewSpiderStatus(),
+		taskPool:  pt,
+		itemPool:  pi,
 	}
-	for _, fn := range e {
-		fn(s)
-	}
+	s.Use(e...)
+	s.schedule()
 	return s
+}
+
+func (s *Spider) Use(exts ...interface{}) {
+	for _, fn := range exts {
+		switch fn.(type) {
+		case func(*Spider):
+			fn.(Extension)(s)
+			break
+		case goreq.Middleware:
+			s.Client.Use(fn.(goreq.Middleware))
+			break
+		default:
+			panic(UnknownExt)
+		}
+	}
 }
 
 func (s *Spider) Forever() {
@@ -78,6 +100,7 @@ func (s *Spider) Forever() {
 }
 
 func (s *Spider) Wait() {
+	time.Sleep(500 * time.Millisecond)
 	for true {
 		if s.taskPool.Running() == 0 && s.itemPool.Running() == 0 {
 			break
@@ -86,8 +109,49 @@ func (s *Spider) Wait() {
 	}
 }
 
+func (s *Spider) SetTaskPoolSize(i int) {
+	s.taskPool.Tune(i)
+}
+
+func (s *Spider) SetItemPoolSize(i int) {
+	s.itemPool.Tune(i)
+}
+
+func (s *Spider) schedule() {
+	go func() {
+		for true {
+			if t := s.Scheduler.GetTask(); t != nil {
+				err := s.taskPool.Submit(func() {
+					s.handleTask(t)
+				})
+				if err != nil {
+					panic(err)
+				}
+			} else {
+				time.Sleep(500 * time.Millisecond)
+			}
+			runtime.Gosched()
+		}
+	}()
+	go func() {
+		for true {
+			if i := s.Scheduler.GetItem(); i != nil {
+				err := s.itemPool.Submit(func() {
+					s.handleOnItem(i)
+				})
+				if err != nil {
+					panic(err)
+				}
+			} else {
+				time.Sleep(500 * time.Millisecond)
+			}
+			runtime.Gosched()
+		}
+	}()
+}
+
 func (s *Spider) handleTask(t *Task) {
-	s.status.FinishTask()
+	s.Status.FinishTask()
 	ctx := &Context{
 		s:     s,
 		Req:   t.Req,
@@ -148,24 +212,14 @@ func (s *Spider) SeedTask(req *goreq.Request, h ...Handler) {
 	ctx.AddTask(req, h...)
 }
 
-func (s *Spider) addTask(t *Task) {
-	err := s.taskPool.Submit(func() {
-		s.handleTask(t)
-	})
-	if err != nil {
-		panic(err)
-	}
-	s.status.AddTask()
+func (s *Spider) addTask(t *Task) { //TODO
+	s.Scheduler.AddTask(t)
+	s.Status.AddTask()
 }
 
 func (s *Spider) addItem(i *Item) {
-	err := s.itemPool.Submit(func() {
-		s.handleOnItem(i)
-	})
-	if err != nil {
-		panic(err)
-	}
-	s.status.AddItem()
+	s.Scheduler.AddItem(i)
+	s.Status.AddItem()
 }
 
 /*************************************************************************************/

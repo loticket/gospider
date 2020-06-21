@@ -50,6 +50,8 @@ func (c *Context) String() string {
 		return "[empty context]"
 	} else if c.Resp == nil {
 		return fmt.Sprint("[not downloaded ctx] ", c.Req.URL.String())
+	} else if c.Resp.Response == nil || c.Resp.Err != nil {
+		return fmt.Sprint("[err ctx] ", c.Req.URL.String())
 	} else {
 		return fmt.Sprint("["+c.Resp.Status+"] ", c.Req.URL)
 	}

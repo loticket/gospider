@@ -77,6 +77,7 @@ func NewSpider(e ...interface{}) *Spider {
 	}
 	s.Use(e...)
 	s.schedule()
+	s.taskPool.Tune()
 	return s
 }
 
@@ -162,7 +163,7 @@ func (s *Spider) handleTask(t *Task) {
 	defer func() {
 		if err := recover(); err != nil {
 			if s.Output {
-				log.Println("["+s.Name+"]", "recover from panic:", err, "ctx:", ctx)
+				log.Println("["+s.Name+"]", "recover from panic:", err, "ctx:", ctx, "\n", SprintStack())
 			}
 			if e, ok := err.(error); ok {
 				s.handleOnError(ctx, e)
@@ -173,7 +174,7 @@ func (s *Spider) handleTask(t *Task) {
 	}()
 	if t.Req.Err != nil {
 		if s.Output {
-			fmt.Println("["+s.Name+"]", "req config error:", t.Req.Err, "ctx:", ctx)
+			fmt.Println("["+s.Name+"]", "resp error:", ctx.Resp.Err, "ctx:", ctx)
 		}
 		s.handleOnReqError(ctx, t.Req.Err)
 		return
@@ -279,7 +280,7 @@ func (s *Spider) handleOnItem(i *Item) {
 	defer func() {
 		if err := recover(); err != nil {
 			if s.Output {
-				fmt.Println("["+s.Name+"]", "recover from panic:", err, "ctx:", i.Ctx)
+				fmt.Println("["+s.Name+"]", "recover from panic:", err, "ctx:", i.Ctx, "\n", SprintStack())
 			}
 			if e, ok := err.(error); ok {
 				s.handleOnError(i.Ctx, e)

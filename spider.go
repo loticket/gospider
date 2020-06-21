@@ -77,7 +77,6 @@ func NewSpider(e ...interface{}) *Spider {
 	}
 	s.Use(e...)
 	s.schedule()
-	s.taskPool.Tune()
 	return s
 }
 

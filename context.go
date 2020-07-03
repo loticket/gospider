@@ -25,6 +25,9 @@ func (c *Context) IsAborted() bool {
 
 // addTask add a task to new task list. After every handler func return,spider will collect these tasks
 func (c *Context) AddTask(req *goreq.Request, h ...Handler) {
+	if !req.URL.IsAbs() {
+		req.URL = c.Req.URL.ResolveReference(req.URL)
+	}
 	t := c.s.handleOnTask(c, NewTask(req, c.Meta, h...))
 	if t == nil {
 		return

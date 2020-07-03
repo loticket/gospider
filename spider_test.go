@@ -16,30 +16,30 @@ func TestNewSpider(t *testing.T) {
 		a += 1
 	})
 	s.OnTask(func(ctx *Context, t *Task) *Task {
-		fmt.Println("OnTask")
+		ctx.Println("OnTask")
 		a += 1
 		return t
 	})
 	s.OnResp(func(ctx *Context) {
-		fmt.Println("OnResp")
+		ctx.Println("OnResp")
 		a += 1
 	})
 	s.OnItem(func(ctx *Context, i interface{}) interface{} {
-		fmt.Println("OnItem", i)
+		ctx.Println("OnItem", i)
 		a += 1
 		return i
 	})
 	s.OnRecover(func(ctx *Context, err error) {
 		a += 1
-		fmt.Println("OnRecover", err)
+		ctx.Println("OnRecover", err)
 	})
 	s.OnReqError(func(ctx *Context, err error) {
 		a += 1
-		fmt.Println("OnReqError", err)
+		ctx.Println("OnReqError", err)
 	})
 	s.OnRespError(func(ctx *Context, err error) {
 		a += 1
-		fmt.Println("OnRespError", err)
+		ctx.Println("OnRespError", err)
 	})
 
 	s.SeedTask(

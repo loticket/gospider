@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/zhshch2002/goreq"
 	"github.com/zhshch2002/gospider"
 )
@@ -15,7 +14,7 @@ func main() {
 		},
 	)
 	s.OnItem(func(ctx *gospider.Context, i interface{}) interface{} {
-		fmt.Println(i)
+		ctx.Println(i)
 		panic("aaaaa")
 		return i
 	})

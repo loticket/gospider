@@ -7,7 +7,6 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"github.com/tidwall/gjson"
 	"github.com/zhshch2002/goreq"
-	"log"
 	"runtime"
 	"time"
 )
@@ -67,7 +66,7 @@ func NewSpider(e ...interface{}) *Spider {
 		panic(err)
 	}
 	s := &Spider{
-		Name:      "gospider",
+		Name:      "spider",
 		Output:    true,
 		Client:    goreq.NewClient(),
 		Scheduler: NewBaseScheduler(false),
@@ -83,10 +82,13 @@ func NewSpider(e ...interface{}) *Spider {
 func (s *Spider) Use(exts ...interface{}) {
 	for _, fn := range exts {
 		switch fn.(type) {
-		case func(*Spider):
+		case func(s *Spider):
+			fn.(func(s *Spider))(s)
+			break
+		case Extension:
 			fn.(Extension)(s)
 			break
-		case goreq.Middleware:
+		case goreq.Middleware, func(*goreq.Client, goreq.Handler) goreq.Handler:
 			s.Client.Use(fn.(goreq.Middleware))
 			break
 		default:
@@ -100,13 +102,23 @@ func (s *Spider) Forever() {
 }
 
 func (s *Spider) Wait() {
-	time.Sleep(500 * time.Millisecond)
+	defer s.taskPool.Release()
+	defer s.itemPool.Release()
 	for true {
-		if s.taskPool.Running() == 0 && s.itemPool.Running() == 0 {
+		if s.Scheduler.IsTaskEmpty() && s.Scheduler.IsItemEmpty() && s.taskPool.Running() == 0 && s.itemPool.Running() == 0 {
 			break
 		}
 		time.Sleep(1 * time.Second)
 	}
+}
+
+func (s *Spider) WaitWithoutRelease() {
+	s.Wait()
+}
+
+func (s *Spider) Reboot() {
+	s.taskPool.Reboot()
+	s.itemPool.Reboot()
 }
 
 func (s *Spider) SetTaskPoolSize(i int) {
@@ -173,7 +185,7 @@ func (s *Spider) handleTask(t *Task) {
 	}()
 	if t.Req.Err != nil {
 		if s.Output {
-			fmt.Println("["+s.Name+"]", "resp error:", ctx.Resp.Err, "ctx:", ctx)
+			log.Println("["+s.Name+"]", "req error:", ctx.Resp.Err, "ctx:", ctx)
 		}
 		s.handleOnReqError(ctx, t.Req.Err)
 		return
@@ -181,13 +193,13 @@ func (s *Spider) handleTask(t *Task) {
 	ctx.Resp = s.Client.Do(t.Req)
 	if ctx.Resp.Err != nil {
 		if s.Output {
-			fmt.Println("["+s.Name+"]", "resp error:", t.Req.Err, "ctx:", ctx)
+			log.Println("["+s.Name+"]", "resp error:", ctx.Resp.Err, "ctx:", ctx)
 		}
 		s.handleOnRespError(ctx, ctx.Resp.Err)
 		return
 	}
 	if s.Output {
-		fmt.Println("["+s.Name+"]", ctx)
+		log.Println("["+s.Name+"]", ctx)
 	}
 	s.handleOnResp(ctx)
 	if ctx.IsAborted() {
@@ -212,7 +224,7 @@ func (s *Spider) SeedTask(req *goreq.Request, h ...Handler) {
 	ctx.AddTask(req, h...)
 }
 
-func (s *Spider) addTask(t *Task) { //TODO
+func (s *Spider) addTask(t *Task) {
 	s.Scheduler.AddTask(t)
 	s.Status.AddTask()
 }
@@ -279,7 +291,7 @@ func (s *Spider) handleOnItem(i *Item) {
 	defer func() {
 		if err := recover(); err != nil {
 			if s.Output {
-				fmt.Println("["+s.Name+"]", "recover from panic:", err, "ctx:", i.Ctx, "\n", SprintStack())
+				log.Println("["+s.Name+"]", "recover from panic:", err, "ctx:", i.Ctx, "\n", SprintStack())
 			}
 			if e, ok := err.(error); ok {
 				s.handleOnError(i.Ctx, e)

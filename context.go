@@ -45,6 +45,34 @@ func (c *Context) IsDownloaded() bool {
 	return c.Resp != nil
 }
 
+func (c *Context) Printf(format string, v ...interface{}) {
+	log.Printf("%v "+format, append([]interface{}{"[" + c.s.Name + "]"}, v...)...)
+}
+func (c *Context) Print(v ...interface{}) {
+	log.Print(append([]interface{}{"[" + c.s.Name + "]"}, v...)...)
+}
+func (c *Context) Println(v ...interface{}) {
+	log.Println(append([]interface{}{"[" + c.s.Name + "]"}, v...)...)
+}
+func (c *Context) Fatalf(format string, v ...interface{}) {
+	log.Fatalf("%v "+format, append([]interface{}{"[" + c.s.Name + "]"}, v...)...)
+}
+func (c *Context) Fatal(v ...interface{}) {
+	log.Fatal(append([]interface{}{"[" + c.s.Name + "]"}, v...)...)
+}
+func (c *Context) Fatalln(v ...interface{}) {
+	log.Fatalln(append([]interface{}{"[" + c.s.Name + "]"}, v...)...)
+}
+func (c *Context) Panicf(format string, v ...interface{}) {
+	log.Panicf("%v "+format, append([]interface{}{"[" + c.s.Name + "]"}, v...)...)
+}
+func (c *Context) Panic(v ...interface{}) {
+	log.Panic(append([]interface{}{"[" + c.s.Name + "]"}, v...)...)
+}
+func (c *Context) Panicln(v ...interface{}) {
+	log.Panicln(append([]interface{}{"[" + c.s.Name + "]"}, v...)...)
+}
+
 func (c *Context) String() string {
 	if c.Req == nil {
 		return "[empty context]"

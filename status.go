@@ -2,7 +2,6 @@ package gospider
 
 import (
 	"fmt"
-	"log"
 	"sync/atomic"
 	"time"
 )

@@ -15,7 +15,6 @@ func main() {
 	)
 	s.OnItem(func(ctx *gospider.Context, i interface{}) interface{} {
 		ctx.Println(i)
-		panic("aaaaa")
 		return i
 	})
 	s.Wait()

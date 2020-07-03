@@ -104,16 +104,16 @@ func (s *Spider) Forever() {
 func (s *Spider) Wait() {
 	defer s.taskPool.Release()
 	defer s.itemPool.Release()
+	s.WaitWithoutRelease()
+}
+
+func (s *Spider) WaitWithoutRelease() {
 	for true {
 		if s.Scheduler.IsTaskEmpty() && s.Scheduler.IsItemEmpty() && s.taskPool.Running() == 0 && s.itemPool.Running() == 0 {
 			break
 		}
 		time.Sleep(1 * time.Second)
 	}
-}
-
-func (s *Spider) WaitWithoutRelease() {
-	s.Wait()
 }
 
 func (s *Spider) Reboot() {

@@ -1,10 +1,33 @@
 package gospider
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhshch2002/goreq"
+	"net/http"
 	"testing"
 )
+
+func TestWithDeduplicate(t *testing.T) {
+	s := NewSpider(WithDeduplicate())
+	got := false
+	s.SeedTask(goreq.Get("https://httpbin.org/get").AddParam("a", "a").AddCookie(&http.Cookie{
+		Name:  "b",
+		Value: "b",
+	}).SetRawBody([]byte("c=c")).AddHeader("d", "d"), func(ctx *Context) {
+		got = true
+	})
+	s.SeedTask(goreq.Get("https://httpbin.org/get").AddParam("a", "a").AddCookie(&http.Cookie{
+		Name:  "b",
+		Value: "b",
+	}).SetRawBody([]byte("c=c")).AddHeader("d", "d"), func(ctx *Context) {
+		t.Error("Deduplicate error")
+	})
+	s.Wait()
+	assert.True(t, got)
+}
 
 func TestWithRobotsTxt(t *testing.T) {
 	s := NewSpider(WithRobotsTxt("gospider"))
@@ -51,4 +74,16 @@ func TestWithMaxReqLimit(t *testing.T) {
 	})
 	s.Wait()
 	assert.Equal(t, 2, count)
+}
+
+func TestWithErrorLog(t *testing.T) {
+	buf := bytes.NewBuffer([]byte{})
+	s := NewSpider(WithErrorLog(buf))
+	s.SeedTask(goreq.Get("https://httpbin.org/get"), func(ctx *Context) {
+		ctx.AddItem(errors.New("test item error"))
+		panic("test panic error")
+	})
+	s.Wait()
+	fmt.Println(buf.String())
+	assert.True(t, buf.Len() > 0)
 }

@@ -1,12 +1,35 @@
 package gospider
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
 	"github.com/slyrz/robots"
 	"github.com/zhshch2002/goreq"
+	"io"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"text/template"
 )
+
+func WithDeduplicate() Extension {
+	return func(s *Spider) {
+		CrawledHash := map[[md5.Size]byte]struct{}{}
+		lock := sync.Mutex{}
+		s.OnTask(func(ctx *Context, t *Task) *Task {
+			has := GetRequestHash(t.Req)
+			lock.Lock()
+			defer lock.Unlock()
+			if _, ok := CrawledHash[has]; ok {
+				return nil
+			}
+			CrawledHash[has] = struct{}{}
+			return t
+		})
+	}
+
+}
 
 func WithRobotsTxt(ua string) Extension {
 	return func(s *Spider) {
@@ -61,6 +84,79 @@ func WithMaxReqLimit(max int64) Extension {
 				return t
 			}
 			return nil
+		})
+	}
+}
+
+func WithErrorLog(f io.Writer) Extension {
+	tmpl, err := template.New("ErrorLog").Parse(`--------------
+Error:     {{.err}}
+Spider:    {{.s.Name}}
+Type:      {{.type}}
+URL:       {{.ctx.Req.URL}}
+ReqError:  {{.ctx.Req.Err}}
+RespError: {{.ctx.Resp.Err}}
+{{if .ctx.Resp}}RespCode:  {{.ctx.Resp.StatusCode}}
+{{if .ctx.Resp.Text}}Text:
+{{.ctx.Resp.Text}}{{end}}{{end}}
+
+Stack:     {{.stack}}
+--------------
+
+`)
+	if err != nil {
+		panic(err)
+	}
+	return func(s *Spider) {
+		formatError := func(ctx *Context, err error, t, stack string) string {
+			buf := bytes.NewBuffer([]byte{})
+			err = tmpl.Execute(buf, map[string]interface{}{
+				"ctx":   ctx,
+				"s":     s,
+				"err":   err,
+				"type":  t,
+				"stack": stack,
+			})
+			if err != nil {
+				log.Println("[WithErrorLog]", err)
+			}
+			return buf.String()
+		}
+		lock := sync.Mutex{}
+		s.OnItem(func(ctx *Context, i interface{}) interface{} {
+			if err, ok := i.(error); ok {
+				lock.Lock()
+				defer lock.Unlock()
+				_, err := f.Write([]byte(formatError(ctx, err, "OnItem", SprintStack())))
+				if err != nil {
+					log.Println("[WithErrorLog]", err)
+				}
+			}
+			return i
+		})
+		s.OnRecover(func(ctx *Context, err error) {
+			lock.Lock()
+			defer lock.Unlock()
+			_, e := f.Write([]byte(formatError(ctx, err, "OnRecover", SprintStack())))
+			if e != nil {
+				log.Println("[WithErrorLog]", e)
+			}
+		})
+		s.OnReqError(func(ctx *Context, err error) {
+			lock.Lock()
+			defer lock.Unlock()
+			_, e := f.Write([]byte(formatError(ctx, err, "OnReqError", SprintStack())))
+			if e != nil {
+				log.Println("[WithErrorLog]", e)
+			}
+		})
+		s.OnRespError(func(ctx *Context, err error) {
+			lock.Lock()
+			defer lock.Unlock()
+			_, e := f.Write([]byte(formatError(ctx, err, "OnRespError", SprintStack())))
+			if e != nil {
+				log.Println("[WithErrorLog]", e)
+			}
 		})
 	}
 }

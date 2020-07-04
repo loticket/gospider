@@ -8,7 +8,5 @@ require (
 	github.com/slyrz/robots v0.0.0-20150806122829-7ebb2b6fc59f
 	github.com/stretchr/testify v1.6.1
 	github.com/tidwall/gjson v1.6.0
-	github.com/zhshch2002/goreq v0.0.0-20200617082247-91d10e958585
-	golang.org/x/net v0.0.0-20200602114024-627f9648deb9 // indirect
-	golang.org/x/text v0.3.3 // indirect
+	github.com/zhshch2002/goreq v0.0.0-20200703025004-9fc7c76bbfa3
 )

@@ -41,12 +41,12 @@ type Spider struct {
 	Name   string
 	Output bool
 
-	Client      *goreq.Client
-	Status      *SpiderStatus
-	Scheduler   Scheduler
-	taskPool    *ants.Pool
-	itemPool    *ants.Pool
-	poolRelease chan struct{}
+	Client                           *goreq.Client
+	Status                           *SpiderStatus
+	Scheduler                        Scheduler
+	taskPool                         *ants.Pool
+	itemPool                         *ants.Pool
+	taskPoolRelease, itemPoolRelease chan struct{}
 
 	onTaskHandlers      []func(ctx *Context, t *Task) *Task
 	onRespHandlers      []Handler
@@ -66,14 +66,15 @@ func NewSpider(e ...interface{}) *Spider {
 		panic(err)
 	}
 	s := &Spider{
-		Name:        "spider",
-		Output:      true,
-		Client:      goreq.NewClient(),
-		Scheduler:   NewBaseScheduler(false),
-		Status:      NewSpiderStatus(),
-		taskPool:    pt,
-		itemPool:    pi,
-		poolRelease: make(chan struct{}, 2),
+		Name:            "spider",
+		Output:          true,
+		Client:          goreq.NewClient(),
+		Scheduler:       NewBaseScheduler(false),
+		Status:          NewSpiderStatus(),
+		taskPool:        pt,
+		itemPool:        pi,
+		taskPoolRelease: make(chan struct{}, 1),
+		itemPoolRelease: make(chan struct{}, 1),
 	}
 	s.Use(e...)
 	s.schedule()
@@ -107,8 +108,8 @@ func (s *Spider) Wait() {
 	defer s.itemPool.Release()
 	s.WaitWithoutRelease()
 	go func() {
-		s.poolRelease <- struct{}{}
-		s.poolRelease <- struct{}{}
+		s.taskPoolRelease <- struct{}{}
+		s.itemPoolRelease <- struct{}{}
 	}()
 }
 
@@ -139,7 +140,7 @@ func (s *Spider) schedule() {
 	go func() {
 		for true {
 			select {
-			case _ = <-s.poolRelease:
+			case _ = <-s.taskPoolRelease:
 				return
 			default:
 				if t := s.Scheduler.GetTask(); t != nil {
@@ -158,7 +159,7 @@ func (s *Spider) schedule() {
 	go func() {
 		for true {
 			select {
-			case _ = <-s.poolRelease:
+			case _ = <-s.itemPoolRelease:
 				return
 			default:
 				if i := s.Scheduler.GetItem(); i != nil {

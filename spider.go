@@ -4,10 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
-	"github.com/panjf2000/ants/v2"
 	"github.com/tidwall/gjson"
 	"github.com/zhshch2002/goreq"
-	"time"
+	"sync"
 )
 
 var (
@@ -38,15 +37,12 @@ func NewTask(req *goreq.Request, meta map[string]interface{}, a ...Handler) (t *
 }
 
 type Spider struct {
-	Name   string
-	Output bool
+	Name    string
+	Logging bool
 
-	Client                           *goreq.Client
-	Status                           *SpiderStatus
-	Scheduler                        Scheduler
-	taskPool                         *ants.Pool
-	itemPool                         *ants.Pool
-	taskPoolRelease, itemPoolRelease chan struct{}
+	Client *goreq.Client
+	Status *SpiderStatus
+	wg     sync.WaitGroup
 
 	onTaskHandlers      []func(ctx *Context, t *Task) *Task
 	onRespHandlers      []Handler
@@ -57,27 +53,14 @@ type Spider struct {
 }
 
 func NewSpider(e ...interface{}) *Spider {
-	pt, err := ants.NewPool(10)
-	if err != nil {
-		panic(err)
-	}
-	pi, err := ants.NewPool(10)
-	if err != nil {
-		panic(err)
-	}
 	s := &Spider{
-		Name:            "spider",
-		Output:          true,
-		Client:          goreq.NewClient(),
-		Scheduler:       NewBaseScheduler(false),
-		Status:          NewSpiderStatus(),
-		taskPool:        pt,
-		itemPool:        pi,
-		taskPoolRelease: make(chan struct{}, 1),
-		itemPoolRelease: make(chan struct{}, 1),
+		Name:    "spider",
+		Logging: true,
+		Client:  goreq.NewClient(),
+		Status:  NewSpiderStatus(),
+		wg:      sync.WaitGroup{},
 	}
 	s.Use(e...)
-	s.schedule()
 	return s
 }
 
@@ -104,77 +87,7 @@ func (s *Spider) Forever() {
 }
 
 func (s *Spider) Wait() {
-	defer s.taskPool.Release()
-	defer s.itemPool.Release()
-	s.WaitWithoutRelease()
-	go func() {
-		s.taskPoolRelease <- struct{}{}
-		s.itemPoolRelease <- struct{}{}
-	}()
-}
-
-func (s *Spider) WaitWithoutRelease() {
-	for true {
-		if s.Scheduler.IsTaskEmpty() && s.Scheduler.IsItemEmpty() && s.taskPool.Running() == 0 && s.itemPool.Running() == 0 {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
-}
-
-func (s *Spider) Reboot() {
-	s.taskPool.Reboot()
-	s.itemPool.Reboot()
-	s.schedule()
-}
-
-func (s *Spider) SetTaskPoolSize(i int) {
-	s.taskPool.Tune(i)
-}
-
-func (s *Spider) SetItemPoolSize(i int) {
-	s.itemPool.Tune(i)
-}
-
-func (s *Spider) schedule() {
-	go func() {
-		for true {
-			select {
-			case _ = <-s.taskPoolRelease:
-				return
-			default:
-				if t := s.Scheduler.GetTask(); t != nil {
-					err := s.taskPool.Submit(func() {
-						s.handleTask(t)
-					})
-					if err != nil {
-						panic(err)
-					}
-				} else {
-					time.Sleep(500 * time.Millisecond)
-				}
-			}
-		}
-	}()
-	go func() {
-		for true {
-			select {
-			case _ = <-s.itemPoolRelease:
-				return
-			default:
-				if i := s.Scheduler.GetItem(); i != nil {
-					err := s.itemPool.Submit(func() {
-						s.handleOnItem(i)
-					})
-					if err != nil {
-						panic(err)
-					}
-				} else {
-					time.Sleep(500 * time.Millisecond)
-				}
-			}
-		}
-	}()
+	s.wg.Wait()
 }
 
 func (s *Spider) handleTask(t *Task) {
@@ -188,7 +101,7 @@ func (s *Spider) handleTask(t *Task) {
 	}
 	defer func() {
 		if err := recover(); err != nil {
-			if s.Output {
+			if s.Logging {
 				log.Println("["+s.Name+"]", "recover from panic:", err, "ctx:", ctx, "\n", SprintStack())
 			}
 			if e, ok := err.(error); ok {
@@ -199,7 +112,7 @@ func (s *Spider) handleTask(t *Task) {
 		}
 	}()
 	if t.Req.Err != nil {
-		if s.Output {
+		if s.Logging {
 			log.Println("["+s.Name+"]", "req error:", ctx.Resp.Err, "ctx:", ctx)
 		}
 		s.handleOnReqError(ctx, t.Req.Err)
@@ -207,13 +120,13 @@ func (s *Spider) handleTask(t *Task) {
 	}
 	ctx.Resp = s.Client.Do(t.Req)
 	if ctx.Resp.Err != nil {
-		if s.Output {
+		if s.Logging {
 			log.Println("["+s.Name+"]", "resp error:", ctx.Resp.Err, "ctx:", ctx)
 		}
 		s.handleOnRespError(ctx, ctx.Resp.Err)
 		return
 	}
-	if s.Output {
+	if s.Logging {
 		log.Println("["+s.Name+"]", ctx)
 	}
 	s.handleOnResp(ctx)
@@ -240,12 +153,20 @@ func (s *Spider) SeedTask(req *goreq.Request, h ...Handler) {
 }
 
 func (s *Spider) addTask(t *Task) {
-	s.Scheduler.AddTask(t)
+	s.wg.Add(1)
+	go func() {
+		s.handleTask(t)
+		s.wg.Done()
+	}()
 	s.Status.AddTask()
 }
 
 func (s *Spider) addItem(i *Item) {
-	s.Scheduler.AddItem(i)
+	s.wg.Add(1)
+	go func() {
+		s.handleOnItem(i)
+		s.wg.Done()
+	}()
 	s.Status.AddItem()
 }
 
@@ -305,7 +226,7 @@ func (s *Spider) OnItem(fn func(ctx *Context, i interface{}) interface{}) {
 func (s *Spider) handleOnItem(i *Item) {
 	defer func() {
 		if err := recover(); err != nil {
-			if s.Output {
+			if s.Logging {
 				log.Println("["+s.Name+"]", "recover from panic:", err, "ctx:", i.Ctx, "\n", SprintStack())
 			}
 			if e, ok := err.(error); ok {

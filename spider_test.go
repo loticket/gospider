@@ -99,20 +99,16 @@ func TestSpiderManyTask(t *testing.T) {
 	assert.Equal(t, 30, i)
 }
 
-func TestSpider_Reboot(t *testing.T) {
+func BenchmarkSpider(b *testing.B) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "Hello")
 	}))
 	defer ts.Close()
-	defer func() {
-		if err := recover(); err != nil {
-			t.Error(err)
-		}
-	}()
 	s := NewSpider()
-	s.SeedTask(goreq.Get(ts.URL))
-	s.Wait()
-	s.Reboot()
-	s.SeedTask(goreq.Get(ts.URL))
+	s.Logging = false
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		s.SeedTask(goreq.Get(ts.URL))
+	}
 	s.Wait()
 }

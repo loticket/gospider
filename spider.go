@@ -155,8 +155,8 @@ func (s *Spider) SeedTask(req *goreq.Request, h ...Handler) {
 func (s *Spider) addTask(t *Task) {
 	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		s.handleTask(t)
-		s.wg.Done()
 	}()
 	s.Status.AddTask()
 }
@@ -164,8 +164,8 @@ func (s *Spider) addTask(t *Task) {
 func (s *Spider) addItem(i *Item) {
 	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		s.handleOnItem(i)
-		s.wg.Done()
 	}()
 	s.Status.AddItem()
 }

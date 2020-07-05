@@ -100,15 +100,21 @@ func TestSpiderManyTask(t *testing.T) {
 }
 
 func BenchmarkSpider(b *testing.B) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = fmt.Fprintf(w, "Hello")
-	}))
-	defer ts.Close()
 	s := NewSpider()
 	s.Logging = false
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		s.SeedTask(goreq.Get(ts.URL))
+		s.SeedTask(goreq.Get("http://127.0.0.1:8080/"))
 	}
 	s.Wait()
+}
+func BenchmarkGoreq(b *testing.B) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, "Hello")
+	}))
+	defer ts.Close()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		goreq.Get(ts.URL).Do()
+	}
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"github.com/tidwall/gjson"
 	"github.com/zhshch2002/goreq"
-	"runtime"
 	"time"
 )
 
@@ -42,11 +41,12 @@ type Spider struct {
 	Name   string
 	Output bool
 
-	Client    *goreq.Client
-	Status    *SpiderStatus
-	Scheduler Scheduler
-	taskPool  *ants.Pool
-	itemPool  *ants.Pool
+	Client      *goreq.Client
+	Status      *SpiderStatus
+	Scheduler   Scheduler
+	taskPool    *ants.Pool
+	itemPool    *ants.Pool
+	poolRelease chan struct{}
 
 	onTaskHandlers      []func(ctx *Context, t *Task) *Task
 	onRespHandlers      []Handler
@@ -66,13 +66,14 @@ func NewSpider(e ...interface{}) *Spider {
 		panic(err)
 	}
 	s := &Spider{
-		Name:      "spider",
-		Output:    true,
-		Client:    goreq.NewClient(),
-		Scheduler: NewBaseScheduler(false),
-		Status:    NewSpiderStatus(),
-		taskPool:  pt,
-		itemPool:  pi,
+		Name:        "spider",
+		Output:      true,
+		Client:      goreq.NewClient(),
+		Scheduler:   NewBaseScheduler(false),
+		Status:      NewSpiderStatus(),
+		taskPool:    pt,
+		itemPool:    pi,
+		poolRelease: make(chan struct{}, 2),
 	}
 	s.Use(e...)
 	s.schedule()
@@ -105,6 +106,10 @@ func (s *Spider) Wait() {
 	defer s.taskPool.Release()
 	defer s.itemPool.Release()
 	s.WaitWithoutRelease()
+	go func() {
+		s.poolRelease <- struct{}{}
+		s.poolRelease <- struct{}{}
+	}()
 }
 
 func (s *Spider) WaitWithoutRelease() {
@@ -119,6 +124,7 @@ func (s *Spider) WaitWithoutRelease() {
 func (s *Spider) Reboot() {
 	s.taskPool.Reboot()
 	s.itemPool.Reboot()
+	s.schedule()
 }
 
 func (s *Spider) SetTaskPoolSize(i int) {
@@ -132,32 +138,40 @@ func (s *Spider) SetItemPoolSize(i int) {
 func (s *Spider) schedule() {
 	go func() {
 		for true {
-			if t := s.Scheduler.GetTask(); t != nil {
-				err := s.taskPool.Submit(func() {
-					s.handleTask(t)
-				})
-				if err != nil {
-					panic(err)
+			select {
+			case _ = <-s.poolRelease:
+				return
+			default:
+				if t := s.Scheduler.GetTask(); t != nil {
+					err := s.taskPool.Submit(func() {
+						s.handleTask(t)
+					})
+					if err != nil {
+						panic(err)
+					}
+				} else {
+					time.Sleep(500 * time.Millisecond)
 				}
-			} else {
-				time.Sleep(500 * time.Millisecond)
 			}
-			runtime.Gosched()
 		}
 	}()
 	go func() {
 		for true {
-			if i := s.Scheduler.GetItem(); i != nil {
-				err := s.itemPool.Submit(func() {
-					s.handleOnItem(i)
-				})
-				if err != nil {
-					panic(err)
+			select {
+			case _ = <-s.poolRelease:
+				return
+			default:
+				if i := s.Scheduler.GetItem(); i != nil {
+					err := s.itemPool.Submit(func() {
+						s.handleOnItem(i)
+					})
+					if err != nil {
+						panic(err)
+					}
+				} else {
+					time.Sleep(500 * time.Millisecond)
 				}
-			} else {
-				time.Sleep(500 * time.Millisecond)
 			}
-			runtime.Gosched()
 		}
 	}()
 }

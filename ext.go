@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"encoding/csv"
 	"github.com/slyrz/robots"
 	"github.com/zhshch2002/goreq"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"text/template"
+	"time"
 )
 
 func WithDeduplicate() Extension {
@@ -90,6 +92,7 @@ func WithMaxReqLimit(max int64) Extension {
 
 func WithErrorLog(f io.Writer) Extension {
 	tmpl, err := template.New("ErrorLog").Parse(`--------------
+Time:      {{.time.Unix}} {{.time.Format "Jan 02, 2006 15:04:05 UTC" }}
 Error:     {{.err}}
 Spider:    {{.s.Name}}
 Type:      {{.type}}
@@ -116,6 +119,7 @@ Stack:     {{.stack}}
 				"err":   err,
 				"type":  t,
 				"stack": stack,
+				"time":  time.Now(),
 			})
 			if err != nil {
 				log.Println("[WithErrorLog]", err)
@@ -157,6 +161,27 @@ Stack:     {{.stack}}
 			if e != nil {
 				log.Println("[WithErrorLog]", e)
 			}
+		})
+	}
+}
+
+type CsvItem []string
+
+func WithCsvItemSaver(f io.Writer) Extension {
+	lock := sync.Mutex{}
+	w := csv.NewWriter(f)
+	return func(s *Spider) {
+		s.OnItem(func(ctx *Context, i interface{}) interface{} {
+			if data, ok := i.(CsvItem); ok {
+				lock.Lock()
+				defer lock.Unlock()
+				err := w.Write(data)
+				if err != nil || s.Logging {
+					ctx.Println("WithCsvItemSaver Error", err)
+				}
+				w.Flush()
+			}
+			return i
 		})
 	}
 }

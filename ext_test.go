@@ -87,3 +87,14 @@ func TestWithErrorLog(t *testing.T) {
 	fmt.Println(buf.String())
 	assert.True(t, buf.Len() > 0)
 }
+
+func TestWithCsvItemSaver(t *testing.T) {
+	buf := bytes.NewBuffer([]byte{})
+	s := NewSpider(WithCsvItemSaver(buf))
+	s.SeedTask(goreq.Get("https://httpbin.org/get"), func(ctx *Context) {
+		ctx.AddItem(CsvItem{ctx.Resp.Request.URL.String(), ctx.Resp.Status})
+	})
+	s.Wait()
+	fmt.Println(buf.String())
+	assert.True(t, buf.Len() > 0)
+}

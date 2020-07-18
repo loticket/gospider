@@ -21,7 +21,7 @@
   * 随机 UA
 * 轻量，适于学习或快速开箱搭建
 
-## 👜获取 Goribot
+## 👜获取 Gospider
 ```sh
 go get -u github.com/zhshch2002/gospider
 ```

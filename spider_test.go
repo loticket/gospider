@@ -102,9 +102,10 @@ func TestSpiderManyTask(t *testing.T) {
 func BenchmarkSpider(b *testing.B) {
 	s := NewSpider()
 	s.Logging = false
+	req := goreq.Get("http://127.0.0.1:8080/")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		s.SeedTask(goreq.Get("http://127.0.0.1:8080/"))
+		s.SeedTask(req)
 	}
 	s.Wait()
 }

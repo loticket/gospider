@@ -50,7 +50,7 @@ fmt.Println(resp.Txt())
 
 其中`.AddParam("A","a")`是配置请求的_链式操作_，在Goreq中还有很多可用的配置函数。
 
-Goreq可以设置中间件、更换Http Client。请见[Goreq](goreq/goreq.md)一章。
+Goreq可以设置中间件、更换Http Client。请见[Goreq](goreq.md)一章。
 
 ## ⚡建立爬虫
 
@@ -114,7 +114,7 @@ type Context struct {
 
 `Context`包括任务的请求、响应、上一个任务传来的参数（`Meta map[string]interface{}`）。
 
-`Req`和`Resp`参考[Goreq](goreq/goreq.md)一章使用。
+`Req`和`Resp`参考[Goreq](goreq.md)一章使用。
 
 `Meta`参数随着调用`ctx.AddTask()`将自动传递到下一个任务里。`SeedTask`创建的任务`Meta`与`Req`为空
 

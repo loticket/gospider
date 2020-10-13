@@ -1,12 +1,11 @@
 package gospider
 
 import (
-	"fmt"
 	"sync/atomic"
 	"time"
 )
 
-type SpiderStatus struct {
+type SpiderStatus struct { //  TODO
 	TotalTask    int64
 	FinishedTask int64
 	TotalItem    int64
@@ -43,12 +42,8 @@ func (s *SpiderStatus) FinishTask() {
 }
 
 func (s *SpiderStatus) PrintSignalLine(name string) {
-	log.Println(
-		"["+name+"]",
-		s.TotalItem,
-		"items("+fmt.Sprint(s.itemSpeed)+"item/sec)",
-		s.FinishedTask,
-		"task finished("+fmt.Sprint(s.ExecSpeed)+"task/sec)",
-		s.TotalTask, "task total"+fmt.Sprint(int((float64(s.FinishedTask)/float64(s.TotalTask))*100))+"%",
-	)
+	log.Info().
+		Str("spider", name).
+		Int64("items/sec", s.TotalItem).
+		Int64("task finished/sec", s.itemSpeed).Send()
 }

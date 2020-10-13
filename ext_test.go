@@ -36,7 +36,7 @@ func TestWithRobotsTxt(t *testing.T) {
 	})
 	got := false
 	s.SeedTask( // unable to access according to https://github.com/robots.txt
-		goreq.Get("https://github.com/zhshch2002/goribot/wiki"),
+		goreq.Get("https://github.com/"),
 		func(ctx *Context) {
 			got = true
 		},

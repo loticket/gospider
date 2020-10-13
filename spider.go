@@ -102,7 +102,7 @@ func (s *Spider) handleTask(t *Task) {
 	defer func() {
 		if err := recover(); err != nil {
 			if s.Logging {
-				log.Println("["+s.Name+"]", "recover from panic:", err, "ctx:", ctx, "\n", SprintStack())
+				log.Error().Err(fmt.Errorf("%v", err)).Str("spider", s.Name).Str("context", fmt.Sprint(ctx)).Str("stack", SprintStack()).Msg("handler recover from panic")
 			}
 			if e, ok := err.(error); ok {
 				s.handleOnError(ctx, e)
@@ -113,7 +113,7 @@ func (s *Spider) handleTask(t *Task) {
 	}()
 	if t.Req.Err != nil {
 		if s.Logging {
-			log.Println("["+s.Name+"]", "req error:", ctx.Resp.Err, "ctx:", ctx)
+			log.Error().Err(fmt.Errorf("%v", ctx.Req.Err)).Str("spider", s.Name).Str("context", fmt.Sprint(ctx)).Str("stack", SprintStack()).Msg("req error")
 		}
 		s.handleOnReqError(ctx, t.Req.Err)
 		return
@@ -121,13 +121,14 @@ func (s *Spider) handleTask(t *Task) {
 	ctx.Resp = s.Client.Do(t.Req)
 	if ctx.Resp.Err != nil {
 		if s.Logging {
-			log.Println("["+s.Name+"]", "resp error:", ctx.Resp.Err, "ctx:", ctx)
+			log.Error().Err(fmt.Errorf("%v", ctx.Resp.Err)).Str("spider", s.Name).Str("context", fmt.Sprint(ctx)).Str("stack", SprintStack()).Msg("resp error")
 		}
 		s.handleOnRespError(ctx, ctx.Resp.Err)
 		return
 	}
 	if s.Logging {
-		log.Println("["+s.Name+"]", ctx)
+		log.Debug().Str("Spider", s.Name).Str("context", fmt.Sprint(ctx)).Msg("Finish")
+
 	}
 	s.handleOnResp(ctx)
 	if ctx.IsAborted() {
@@ -227,7 +228,7 @@ func (s *Spider) handleOnItem(i *Item) {
 	defer func() {
 		if err := recover(); err != nil {
 			if s.Logging {
-				log.Println("["+s.Name+"]", "recover from panic:", err, "ctx:", i.Ctx, "\n", SprintStack())
+				log.Error().Err(fmt.Errorf("%v", err)).Str("spider", s.Name).Str("context", fmt.Sprint(i.Ctx)).Str("stack", SprintStack()).Msg("OnItem recover from panic")
 			}
 			if e, ok := err.(error); ok {
 				s.handleOnError(i.Ctx, e)

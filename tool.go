@@ -2,9 +2,10 @@ package gospider
 
 import (
 	"crypto/md5"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/pkgerrors"
 	"github.com/zhshch2002/goreq"
 	"io/ioutil"
-	slog "log"
 	"net/url"
 	"os"
 	"runtime"
@@ -12,10 +13,10 @@ import (
 	"strings"
 )
 
-var log *slog.Logger
+var log = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().Timestamp().Stack().Logger()
 
 func init() {
-	log = slog.New(os.Stdout, "GoSpider|", slog.Lmicroseconds|slog.Lshortfile)
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 }
 
 func SprintStack() string {

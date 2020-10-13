@@ -1,18 +1,17 @@
 package gospider
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/csv"
+	"fmt"
+	"github.com/rs/zerolog"
 	"github.com/slyrz/robots"
 	"github.com/zhshch2002/goreq"
 	"io"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"text/template"
-	"time"
 )
 
 func WithDeduplicate() Extension {
@@ -91,76 +90,39 @@ func WithMaxReqLimit(max int64) Extension {
 }
 
 func WithErrorLog(f io.Writer) Extension {
-	tmpl, err := template.New("ErrorLog").Parse(`--------------
-Time:      {{.time.Unix}} {{.time.Format "Jan 02, 2006 15:04:05 UTC" }}
-Error:     {{.err}}
-Spider:    {{.s.Name}}
-Type:      {{.type}}
-URL:       {{.ctx.Req.URL}}
-ReqError:  {{.ctx.Req.Err}}
-RespError: {{.ctx.Resp.Err}}
-{{if .ctx.Resp}}RespCode:  {{.ctx.Resp.StatusCode}}
-{{if .ctx.Resp.Text}}Text:
-{{.ctx.Resp.Text}}{{end}}{{end}}
-
-Stack:     {{.stack}}
---------------
-
-`)
-	if err != nil {
-		panic(err)
-	}
 	return func(s *Spider) {
-		formatError := func(ctx *Context, err error, t, stack string) string {
-			buf := bytes.NewBuffer([]byte{})
-			err = tmpl.Execute(buf, map[string]interface{}{
-				"ctx":   ctx,
-				"s":     s,
-				"err":   err,
-				"type":  t,
-				"stack": stack,
-				"time":  time.Now(),
-			})
-			if err != nil {
-				log.Println("[WithErrorLog]", err)
+		l := zerolog.New(f).With().Timestamp().Logger()
+		send := func(ctx *Context, err error, t, stack string) {
+			event := l.Err(err).
+				Str("spider", s.Name).
+				Str("type", "item").
+				Str("ctx", fmt.Sprint(ctx)).
+				Str("url", ctx.Req.URL.String()).
+				AnErr("req err", ctx.Req.Err).
+				AnErr("resp err", ctx.Resp.Err)
+			if ctx.Resp != nil {
+				event.Int("resp code", ctx.Resp.StatusCode)
+				if ctx.Resp.Text != "" {
+					event.Str("text", ctx.Resp.Text)
+				}
 			}
-			return buf.String()
+			event.Str("stack", SprintStack()).Send()
 		}
-		lock := sync.Mutex{}
+
 		s.OnItem(func(ctx *Context, i interface{}) interface{} {
 			if err, ok := i.(error); ok {
-				lock.Lock()
-				defer lock.Unlock()
-				_, err := f.Write([]byte(formatError(ctx, err, "OnItem", SprintStack())))
-				if err != nil {
-					log.Println("[WithErrorLog]", err)
-				}
+				send(ctx, err, "item", SprintStack())
 			}
 			return i
 		})
 		s.OnRecover(func(ctx *Context, err error) {
-			lock.Lock()
-			defer lock.Unlock()
-			_, e := f.Write([]byte(formatError(ctx, err, "OnRecover", SprintStack())))
-			if e != nil {
-				log.Println("[WithErrorLog]", e)
-			}
+			send(ctx, err, "OnRecover", SprintStack())
 		})
 		s.OnReqError(func(ctx *Context, err error) {
-			lock.Lock()
-			defer lock.Unlock()
-			_, e := f.Write([]byte(formatError(ctx, err, "OnReqError", SprintStack())))
-			if e != nil {
-				log.Println("[WithErrorLog]", e)
-			}
+			send(ctx, err, "OnReqError", SprintStack())
 		})
 		s.OnRespError(func(ctx *Context, err error) {
-			lock.Lock()
-			defer lock.Unlock()
-			_, e := f.Write([]byte(formatError(ctx, err, "OnRespError", SprintStack())))
-			if e != nil {
-				log.Println("[WithErrorLog]", e)
-			}
+			send(ctx, err, "OnRespError", SprintStack())
 		})
 	}
 }
@@ -176,8 +138,8 @@ func WithCsvItemSaver(f io.Writer) Extension {
 				lock.Lock()
 				defer lock.Unlock()
 				err := w.Write(data)
-				if err != nil || s.Logging {
-					ctx.Println("WithCsvItemSaver Error", err)
+				if err != nil {
+					log.Err(err).Msg("WithCsvItemSaver Error")
 				}
 				w.Flush()
 			}

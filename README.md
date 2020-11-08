@@ -1,7 +1,7 @@
 # Gospider
 [![codecov](https://codecov.io/gh/zhshch2002/gospider/branch/master/graph/badge.svg)](https://codecov.io/gh/zhshch2002/gospider)
 
-[中文文档](https://gospider.athorx.com/)
+[中文文档](https://gospider.xzhsh.ch/)
 
 `Gospider`是一个轻量的，对分布式有好的Go爬虫框架。`Goreq`是同时设计的一个基于 Go 标准库`net/http`的包装库，用来提供简单的`Http`访问操作。
 

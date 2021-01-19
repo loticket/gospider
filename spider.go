@@ -87,10 +87,6 @@ func (s *Spider) Forever() {
 	select {}
 }
 
-func (s *Spider) Wait() {
-	s.wg.Wait()
-}
-
 func (s *Spider) handleTask(t *Task) {
 	s.Status.FinishTask()
 	ctx := &Context{

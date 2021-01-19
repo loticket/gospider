@@ -1,4 +1,4 @@
-module github.com/zhshch2002/gospider
+module github.com/loticket/gospider
 
 go 1.14
 

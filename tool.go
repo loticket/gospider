@@ -4,7 +4,7 @@ import (
 	"crypto/md5"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/pkgerrors"
-	"github.com/zhshch2002/goreq"
+	"github.com/loticket/goreq"
 	"io/ioutil"
 	"net/url"
 	"os"

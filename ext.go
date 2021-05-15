@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/slyrz/robots"
-	"github.com/zhshch2002/goreq"
+	"github.com/loticket/goreq"
 	"io"
 	"strings"
 	"sync"

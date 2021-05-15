@@ -7,7 +7,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/tidwall/gjson"
-	"github.com/zhshch2002/goreq"
+	"github.com/loticket/goreq"
 )
 
 var (
